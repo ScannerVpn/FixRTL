@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RtlFix.Core\RtlFix.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>RtlFix.Probe</RootNamespace>
+    <AssemblyName>RtlFix.Probe</AssemblyName>
+  </PropertyGroup>
+
+</Project>

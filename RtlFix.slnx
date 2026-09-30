@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RtlFix.App/RtlFix.App.csproj" />
+    <Project Path="src/RtlFix.Core/RtlFix.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RtlFix.Core.Tests/RtlFix.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/RtlFix.GenTables/RtlFix.GenTables.csproj" />
+    <Project Path="tools/RtlFix.Probe/RtlFix.Probe.csproj" />
+  </Folder>
+</Solution>

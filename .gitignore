@@ -1,0 +1,23 @@
+# Build artifacts
+bin/
+obj/
+dist/
+publish/
+
+# Scratch and local test material
+.scratch/
+
+# Reference files copied from other projects (not part of the source)
+index.cjs
+package.json
+package-lock.json
+node_modules/
+
+# Local test page
+preview.html
+
+# IDE / OS
+*.user
+*.suo
+*.log
+Thumbs.db

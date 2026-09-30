@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "RtlNow — راست‌چین‌ساز صفحات وب و جیمیل",
+  "version": "1.0.0",
+  "description": "راست‌چین‌سازی خودکار و فوری متن‌های فارسی در جیمیل، صفحات وب و تمام سایت‌ها درجا و بدون نیاز به کپی-پیست.",
+  "permissions": ["storage", "contextMenus", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RtlNow — راست‌چین‌ساز"
+  },
+  "commands": {
+    "toggle-rtl": {
+      "suggested_key": {
+        "default": "Alt+Shift+X"
+      },
+      "description": "راست‌چین‌سازی صفحه"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["direction.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

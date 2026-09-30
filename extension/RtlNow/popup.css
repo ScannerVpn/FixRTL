@@ -1,0 +1,35 @@
+body {
+  width: 260px;
+  margin: 0;
+  padding: 12px 14px;
+  font: 13px/1.7 "Segoe UI", Tahoma, sans-serif;
+  background: #181820;
+  color: #e8e8f0;
+}
+
+h1 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #8fd6bc;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+input {
+  accent-color: #26806a;
+  margin-top: 3px;
+}
+
+#status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #b0a06a;
+}
