@@ -23,6 +23,7 @@ static class ConsoleBufferEngine
     };
 
     static readonly Dictionary<(uint Pid, int Row), string> rowCache = new();
+    static readonly Dictionary<(uint Pid, int Row), string> rawSeen = new();
     static CancellationTokenSource? cts;
     static Task? workerTask;
 
@@ -107,21 +108,18 @@ static class ConsoleBufferEngine
             return 0;
         }
 
-        // Windows Terminal (1.22+) renders bidi itself when experimental.enableBidi is on: raw
-        // cells display correctly there, rewriting them would double-reverse the text, and our
-        // writes can never reach its scrollback anyway. ConPTY consoles expose a pseudo window
-        // (class PseudoConsoleWindow) regardless of who owns it — only classic conhost windows
-        // (ConsoleWindowClass) stay bidi-blind and need the buffer engine.
+        // Two console kinds need opposite treatment:
+        //  • ConPTY (class PseudoConsoleWindow — Windows Terminal): with experimental.enableBidi it
+        //    orders and shapes Persian itself, so rewriting cells would double-reverse it. The
+        //    engine only right-aligns stable lines (padding + attribute shift); lines still being
+        //    streamed stay put and remain readable through the terminal's own bidi.
+        //  • Classic conhost (ConsoleWindowClass): bidi-blind, needs the full visual transform.
         var hwnd = Interop.GetConsoleWindow();
-        if (hwnd != IntPtr.Zero)
-        {
-            var className = new StringBuilder(64);
-            if (Interop.GetClassName(hwnd, className, 64) > 0 &&
-                className.ToString() == "PseudoConsoleWindow")
-            {
-                return 0;
-            }
-        }
+        var className = new StringBuilder(64);
+        var isConPty = hwnd != IntPtr.Zero &&
+            Interop.GetClassName(hwnd, className, 64) > 0 &&
+            className.ToString() == "PseudoConsoleWindow";
+
 
         int fixedRows = 0;
         try
@@ -233,6 +231,48 @@ static class ConsoleBufferEngine
                                 rowCache[key] = line;
                                 continue;
                             }
+                        }
+
+                        if (isConPty)
+                        {
+                            // Right-align raw text for the terminal's own bidi renderer. A line
+                            // must be seen unchanged on two consecutive ticks before it is moved:
+                            // lines Ink is still streaming keep changing and stay untouched (they
+                            // are readable through bidi anyway), so there is no repaint race —
+                            // each finished line settles right once and stays.
+                            var rawSeenKey = key;
+                            rawSeen.TryGetValue(rawSeenKey, out var prevRaw);
+                            if (prevRaw != line)
+                            {
+                                rawSeen[rawSeenKey] = line;
+                                continue;
+                            }
+
+                            var content = line.TrimEnd();
+                            if (!HasRawPersianLetters(content) || content.Length >= width)
+                            {
+                                rowCache[key] = line;
+                                continue;
+                            }
+
+                            var offset = width - content.Length;
+                            var shifted = content.PadLeft(width);
+                            var shiftAttrs = new ushort[width];
+                            Array.Fill(shiftAttrs, attrs[width - 1]);
+                            for (var k = 0; k < content.Length; k++)
+                                shiftAttrs[offset + k] = attrs[k];
+
+                            if (Interop.WriteConsoleOutputCharacter(hOut, shifted, (uint)width, coord, out _) &&
+                                Interop.WriteConsoleOutputAttribute(hOut, shiftAttrs, (uint)width, coord, out _))
+                            {
+                                fixedRows++;
+                                rowCache[key] = shifted;
+                            }
+                            else
+                            {
+                                rowCache[key] = line;
+                            }
+                            continue;
                         }
 
                         string candidate;
