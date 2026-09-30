@@ -97,6 +97,22 @@ static class Interop
         COORD dwWriteCoord,
         out uint lpNumberOfCharsWritten);
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool ReadConsoleOutputAttribute(
+        IntPtr hConsoleOutput,
+        [Out] ushort[] lpAttribute,
+        uint nLength,
+        COORD dwReadCoord,
+        out uint lpNumberOfAttrsRead);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool WriteConsoleOutputAttribute(
+        IntPtr hConsoleOutput,
+        ushort[] lpAttribute,
+        uint nLength,
+        COORD dwWriteCoord,
+        out uint lpNumberOfAttrsWritten);
+
     [StructLayout(LayoutKind.Sequential)]
     public struct COORD
     {

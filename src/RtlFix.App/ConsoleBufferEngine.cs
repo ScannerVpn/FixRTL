@@ -66,7 +66,7 @@ static class ConsoleBufferEngine
 
             try
             {
-                await Task.Delay(350, token).ConfigureAwait(false);
+                await Task.Delay(120, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -133,6 +133,7 @@ static class ConsoleBufferEngine
                 var top = Math.Max(0, (int)info.srWindow.Top);
                 var bottom = Math.Min((int)info.dwSize.Y - 1, (int)info.srWindow.Bottom);
                 var buffer = new char[width];
+                var attrs = new ushort[width];
 
                 for (var y = top; y <= bottom; y++)
                 {
@@ -146,6 +147,7 @@ static class ConsoleBufferEngine
                     var coord = new Interop.COORD { X = 0, Y = (short)y };
                     if (Interop.ReadConsoleOutputCharacter(hOut, buffer, (uint)width, coord, out var read) && read > 0)
                     {
+                        Interop.ReadConsoleOutputAttribute(hOut, attrs, (uint)width, coord, out _);
                         var line = new string(buffer, 0, (int)read).PadRight(width);
                         if (rowCache.TryGetValue(key, out var cached) && cached == line)
                         {
@@ -182,7 +184,10 @@ static class ConsoleBufferEngine
                         if (forms >= 0 && nonspace <= 5 && !HasRawPersianLetters(line) && asciiRunes <= 1)
                         {
                             var blank = new string(' ', width);
-                            if (Interop.WriteConsoleOutputCharacter(hOut, blank, (uint)width, coord, out _))
+                            var blankAttrs = new ushort[width];
+                            Array.Fill(blankAttrs, attrs[width - 1]);
+                            if (Interop.WriteConsoleOutputCharacter(hOut, blank, (uint)width, coord, out _) &&
+                                Interop.WriteConsoleOutputAttribute(hOut, blankAttrs, (uint)width, coord, out _))
                             {
                                 fixedRows++;
                                 rowCache[key] = blank;
@@ -192,6 +197,25 @@ static class ConsoleBufferEngine
                                 rowCache[key] = line;
                             }
                             continue;
+                        }
+
+                        // Orphan color: an all-space row whose cells still carry a few colored
+                        // attribute runs left behind when the words they painted moved on. The TUI
+                        // has no element this small, so reset those cells to the row's default
+                        // attribute instead of leaving floating color blocks on the margin.
+                        if (nonspace == 0)
+                        {
+                            var stray = 0;
+                            for (var k = 0; k < width && stray <= 6; k++)
+                                if (attrs[k] != attrs[width - 1]) stray++;
+                            if (stray > 0 && stray <= 6)
+                            {
+                                var blankAttrs = new ushort[width];
+                                Array.Fill(blankAttrs, attrs[width - 1]);
+                                Interop.WriteConsoleOutputAttribute(hOut, blankAttrs, (uint)width, coord, out _);
+                                rowCache[key] = line;
+                                continue;
+                            }
                         }
 
                         string candidate;
@@ -215,18 +239,25 @@ static class ConsoleBufferEngine
                             continue;
                         }
 
-                        var transformed = RtlTransform.Rtlize(candidate, visualOptions);
+                        // Colors live in per-cell attributes and do not move by themselves: the
+                        // mapped transform reports which source cell each output char came from,
+                        // so the TUI's per-word coloring travels with the reordered text instead
+                        // of staying behind under the wrong letters.
+                        var mapped = RtlTransform.RtlizeMapped(candidate, visualOptions);
+                        var transformed = mapped.Text;
+                        if (transformed.Length > width) transformed = transformed[..width];
 
-                        if (transformed.Length < width)
+                        var outAttrs = new ushort[width];
+                        for (var k = 0; k < transformed.Length; k++)
                         {
-                            transformed = transformed.PadRight(width);
+                            var src = mapped.SourceCharIndex[k];
+                            outAttrs[k] = src < width ? attrs[src] : attrs[width - 1];
                         }
-                        else if (transformed.Length > width)
-                        {
-                            transformed = transformed[..width];
-                        }
+                        for (var k = transformed.Length; k < width; k++) outAttrs[k] = attrs[width - 1];
+                        if (transformed.Length < width) transformed = transformed.PadRight(width);
 
-                        if (Interop.WriteConsoleOutputCharacter(hOut, transformed, (uint)width, coord, out _))
+                        if (Interop.WriteConsoleOutputCharacter(hOut, transformed, (uint)width, coord, out _) &&
+                            Interop.WriteConsoleOutputAttribute(hOut, outAttrs, (uint)width, coord, out _))
                         {
                             fixedRows++;
                             rowCache[key] = transformed;

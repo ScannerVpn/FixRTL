@@ -29,6 +29,52 @@ public static class RtlTransform
         return builder.ToString();
     }
 
+    /// <summary>The visual string plus, per output char, the input char index it came from —
+    /// so a caller that redraws a fixed grid (terminal cells) can carry per-character coloring
+    /// along with the reordered text.</summary>
+    public readonly record struct VisualWithMap(string Text, int[] SourceCharIndex);
+
+    public static VisualWithMap RtlizeMapped(string text, RtlOptions? options = null)
+    {
+        options ??= new RtlOptions();
+        var runes = text.EnumerateRunes().ToArray();
+        if (runes.Length == 0 || !ContainsRightToLeft(runes))
+            return new VisualWithMap(text, Enumerable.Range(0, text.Length).ToArray());
+
+        var level = BaseLevel(runes, text);
+        var shaped = options.Shape
+            ? PersianShaper.ShapeRunes(runes)
+            : new PersianShaper.Shaped(runes, AllPresent(runes.Length));
+        var analysis = BidiResolver.Resolve(runes, level);
+
+        // char offset of each rune, so map entries line up with the original string's chars
+        var charOfRune = new int[runes.Length];
+        var offset = 0;
+        for (var r = 0; r < runes.Length; r++)
+        {
+            charOfRune[r] = offset;
+            offset += runes[r].Utf16SequenceLength;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        var map = new List<int>(text.Length);
+        foreach (var i in analysis.VisualIndices())
+        {
+            if (!shaped.Present[i]) continue;
+            var rune = shaped.Forms[i];
+            if (options.Mirror && analysis.IsRtl(i))
+            {
+                var pair = UnicodeTables.GetMirror(rune);
+                if (pair >= 0) rune = new Rune(pair);
+            }
+            builder.Append(rune.ToString());
+            // a surrogate pair is two output chars sharing one source cell
+            map.Add(charOfRune[i]);
+            if (rune.Utf16SequenceLength == 2) map.Add(charOfRune[i]);
+        }
+        return new VisualWithMap(builder.ToString(), map.ToArray());
+    }
+
     /// <summary>
     /// Inverts a visual-order string back to logical order: runs are walked right-to-left in
     /// reverse, right-to-left runs are flipped and left-to-right runs (English words, numbers)
