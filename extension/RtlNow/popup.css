@@ -33,3 +33,19 @@ input {
   font-size: 12px;
   color: #b0a06a;
 }
+
+.source {
+  display: block;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #2a2a35;
+  color: #7aa7ff;
+  text-decoration: none;
+  font-size: 11px;
+  direction: ltr;
+  text-align: right;
+}
+
+.source:hover {
+  text-decoration: underline;
+}

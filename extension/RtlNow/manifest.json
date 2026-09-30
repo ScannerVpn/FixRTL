@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "RtlNow — راست‌چین‌ساز صفحات وب و جیمیل",
-  "version": "1.0.0",
-  "description": "راست‌چین‌سازی خودکار و فوری متن‌های فارسی در جیمیل، صفحات وب و تمام سایت‌ها درجا و بدون نیاز به کپی-پیست.",
+  "version": "1.0.1",
+  "description": "راست‌چین‌سازی خودکار متن فارسی در همه‌ی سایت‌ها و جیمیل، درجا و بدون کپی-پیست. سورس: github.com/ScannerVpn/FixRTL",
+  "homepage_url": "https://github.com/ScannerVpn/FixRTL",
   "permissions": ["storage", "contextMenus", "activeTab"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -10,7 +11,17 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "RtlNow — راست‌چین‌ساز"
+    "default_title": "RtlNow — راست‌چین‌ساز",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "commands": {
     "toggle-rtl": {
