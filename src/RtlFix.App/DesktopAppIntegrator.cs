@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -408,11 +409,11 @@ public static class DesktopAppIntegrator
                 defaults.Remove("experimental.enableBidi");
 
                 var font = defaults["font"] as JsonObject ?? new JsonObject();
-                font["face"] = "Cascadia Code, Segoe UI";
+                font["face"] = PickTerminalFont();
                 defaults["font"] = font;
 
                 File.WriteAllText(settingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-                message = "فونت ترمینال ویندوز به Cascadia Code, Segoe UI (با فال‌بک و اتصال درست حروف فارسی) تنظیم شد!";
+                message = $"فونت ترمینال به {PickTerminalFont()} تنظیم شد (monospace با گلیف کامل فارسی)!";
                 return true;
             }
 
@@ -1025,6 +1026,37 @@ public static class DesktopAppIntegrator
             }
         }
         catch { }
+    }
+
+    /// <summary>
+    /// A terminal font must be monospaced for Latin and still carry the Arabic presentation forms
+    /// the console engine writes. Cascadia/Consolas have none of those glyphs, and proportional
+    /// fonts (Tahoma, Arial) visually tear English words apart in the cell grid — so pick a font
+    /// that has both, falling back to the one Windows always ships.
+    /// </summary>
+    public static string PickTerminalFont()
+    {
+        foreach (var family in new[] { "DejaVu Sans Mono", "Courier New" })
+        {
+            if (IsFontInstalled(family)) return family;
+        }
+        return "Courier New";
+    }
+
+    static bool IsFontInstalled(string family)
+    {
+        foreach (var hive in new[] { Registry.LocalMachine, Registry.CurrentUser })
+        {
+            try
+            {
+                using var key = hive.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
+                var names = key?.GetValueNames();
+                if (names != null && names.Any(v => v.StartsWith(family + " (", StringComparison.OrdinalIgnoreCase)))
+                    return true;
+            }
+            catch { }
+        }
+        return false;
     }
 
     static string? FindVsCodeWorkbenchCss()

@@ -173,11 +173,13 @@ static class ConsoleBufferEngine
                         var forms = IndexOfPresentationForm(line);
 
                         // A reflow can leave rows holding nothing but two or three orphan form
-                        // cells. They read as scattered letters, carry no recoverable content, and
-                        // the TUI never writes forms itself — blank them instead of leaving noise.
+                        // cells (sometimes with a stray letter of a word that moved elsewhere).
+                        // They read as scattered noise, carry no recoverable content, and the TUI
+                        // never writes forms itself — blank them, but keep genuinely short lines
+                        // like "OK" or "y" intact.
                         var nonspace = line.Count(c => !char.IsWhiteSpace(c));
-                        if (forms >= 0 && nonspace <= 4 && !HasRawPersianLetters(line) &&
-                            !line.Any(char.IsAsciiLetterOrDigit))
+                        var asciiRunes = line.Count(char.IsAsciiLetterOrDigit);
+                        if (forms >= 0 && nonspace <= 5 && !HasRawPersianLetters(line) && asciiRunes <= 1)
                         {
                             var blank = new string(' ', width);
                             if (Interop.WriteConsoleOutputCharacter(hOut, blank, (uint)width, coord, out _))
