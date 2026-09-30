@@ -1,3 +1,4 @@
+using System.Text;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -104,6 +105,22 @@ static class ConsoleBufferEngine
         if (!Interop.AttachConsole(targetPid))
         {
             return 0;
+        }
+
+        // Windows Terminal (1.22+) renders bidi itself when experimental.enableBidi is on: raw
+        // cells display correctly there, rewriting them would double-reverse the text, and our
+        // writes can never reach its scrollback anyway. ConPTY consoles expose a pseudo window
+        // (class PseudoConsoleWindow) regardless of who owns it — only classic conhost windows
+        // (ConsoleWindowClass) stay bidi-blind and need the buffer engine.
+        var hwnd = Interop.GetConsoleWindow();
+        if (hwnd != IntPtr.Zero)
+        {
+            var className = new StringBuilder(64);
+            if (Interop.GetClassName(hwnd, className, 64) > 0 &&
+                className.ToString() == "PseudoConsoleWindow")
+            {
+                return 0;
+            }
         }
 
         int fixedRows = 0;

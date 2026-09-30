@@ -406,14 +406,19 @@ public static class DesktopAppIntegrator
                 var defaults = profiles["defaults"] as JsonObject ?? new JsonObject();
                 profiles["defaults"] = defaults;
 
-                defaults.Remove("experimental.enableBidi");
+                // Windows Terminal 1.22+ renders bidirectional text (with Arabic shaping) itself —
+                // raw console text displays right-to-left at draw time, which is exactly what the
+                // buffer engine must not fight. Turn it on rather than rewriting cells.
+                var experimental = defaults["experimental"] as JsonObject ?? new JsonObject();
+                experimental["enableBidi"] = true;
+                defaults["experimental"] = experimental;
 
                 var font = defaults["font"] as JsonObject ?? new JsonObject();
                 font["face"] = PickTerminalFont();
                 defaults["font"] = font;
 
                 File.WriteAllText(settingsPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-                message = $"فونت ترمینال به {PickTerminalFont()} تنظیم شد (monospace با گلیف کامل فارسی)!";
+                message = $"راست‌چین بومی Windows Terminal فعال شد و فونت به {PickTerminalFont()} تنظیم شد!";
                 return true;
             }
 
