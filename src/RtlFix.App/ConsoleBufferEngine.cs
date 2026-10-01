@@ -108,19 +108,11 @@ static class ConsoleBufferEngine
             return 0;
         }
 
-        // Two console kinds need opposite treatment:
-        //  • ConPTY (class PseudoConsoleWindow — Windows Terminal): with experimental.enableBidi it
-        //    orders and shapes Persian itself, so rewriting cells would double-reverse it. The
-        //    engine only right-aligns stable lines (padding + attribute shift); lines still being
-        //    streamed stay put and remain readable through the terminal's own bidi.
-        //  • Classic conhost (ConsoleWindowClass): bidi-blind, needs the full visual transform.
-        var hwnd = Interop.GetConsoleWindow();
-        var className = new StringBuilder(64);
-        var isConPty = hwnd != IntPtr.Zero &&
-            Interop.GetClassName(hwnd, className, 64) > 0 &&
-            className.ToString() == "PseudoConsoleWindow";
-
-
+        // Every console host (Windows Terminal via ConPTY, classic conhost) draws cells
+        // left-anchored and does not shape or reorder Persian itself (WT's experimental bidi
+        // renders with a fixed LTR paragraph direction, which reads backwards for Persian) — so
+        // the engine writes the final visual form: shaped, UAX #9 reordered, mirrored,
+        // right-aligned, with colors carried along.
         int fixedRows = 0;
         try
         {
@@ -164,6 +156,31 @@ static class ConsoleBufferEngine
                     {
                         Interop.ReadConsoleOutputAttribute(hOut, attrs, (uint)width, coord, out _);
                         var line = new string(buffer, 0, (int)read).PadRight(width);
+
+                        // Stray patch cells: one or two characters sitting deep inside an
+                        // otherwise empty row are leftovers of Ink's partial rewrites, never real
+                        // content (a real short line like "نه" starts near the margin). Checked
+                        // before the cache so debris cached by an older pass still gets cleaned.
+                        var trimmedRow = line.TrimEnd();
+                        var firstCharPos = trimmedRow.Length == 0 ? -1 : line.IndexOf(trimmedRow[0]);
+                        if (trimmedRow.Length > 0 && trimmedRow.Length <= 2 && firstCharPos >= 8)
+                        {
+                            var blank = new string(' ', width);
+                            var blankAttrs = new ushort[width];
+                            Array.Fill(blankAttrs, attrs[width - 1]);
+                            if (Interop.WriteConsoleOutputCharacter(hOut, blank, (uint)width, coord, out _) &&
+                                Interop.WriteConsoleOutputAttribute(hOut, blankAttrs, (uint)width, coord, out _))
+                            {
+                                rowCache[key] = blank;
+                                rawSeen.Remove(key);
+                            }
+                            else
+                            {
+                                rowCache[key] = line;
+                            }
+                            continue;
+                        }
+
                         if (rowCache.TryGetValue(key, out var cached) && cached == line)
                         {
                             continue;
@@ -233,45 +250,15 @@ static class ConsoleBufferEngine
                             }
                         }
 
-                        if (isConPty)
+                        // Transform only lines that have settled: a line still being streamed
+                        // changes every frame, so wait for two identical sightings. This is what
+                        // keeps the engine out of a repaint race with the TUI — streaming rows
+                        // stay untouched until their text stops moving.
+                        var settledContent = line.TrimEnd();
+                        rawSeen.TryGetValue(key, out var prevSettled);
+                        if (prevSettled != settledContent)
                         {
-                            // Right-align raw text for the terminal's own bidi renderer. A line
-                            // must be seen unchanged on two consecutive ticks before it is moved:
-                            // lines Ink is still streaming keep changing and stay untouched (they
-                            // are readable through bidi anyway), so there is no repaint race —
-                            // each finished line settles right once and stays.
-                            var rawSeenKey = key;
-                            rawSeen.TryGetValue(rawSeenKey, out var prevRaw);
-                            if (prevRaw != line)
-                            {
-                                rawSeen[rawSeenKey] = line;
-                                continue;
-                            }
-
-                            var content = line.TrimEnd();
-                            if (!HasRawPersianLetters(content) || content.Length >= width)
-                            {
-                                rowCache[key] = line;
-                                continue;
-                            }
-
-                            var offset = width - content.Length;
-                            var shifted = content.PadLeft(width);
-                            var shiftAttrs = new ushort[width];
-                            Array.Fill(shiftAttrs, attrs[width - 1]);
-                            for (var k = 0; k < content.Length; k++)
-                                shiftAttrs[offset + k] = attrs[k];
-
-                            if (Interop.WriteConsoleOutputCharacter(hOut, shifted, (uint)width, coord, out _) &&
-                                Interop.WriteConsoleOutputAttribute(hOut, shiftAttrs, (uint)width, coord, out _))
-                            {
-                                fixedRows++;
-                                rowCache[key] = shifted;
-                            }
-                            else
-                            {
-                                rowCache[key] = line;
-                            }
+                            rawSeen[key] = settledContent;
                             continue;
                         }
 
